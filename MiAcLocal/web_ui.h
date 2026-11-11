@@ -9,6 +9,7 @@
 #include "ac_device.h"
 #include "thermostat.h"
 #include "event_log.h"
+#include "telemetry.h"
 
 // Embedded HTTP server exposing Dashboard, Settings, Debug pages and JSON REST APIs.
 class WebUi {
@@ -16,11 +17,13 @@ public:
   WebUi();
   void begin(AppSettings& appCfg,
              WifiSettings& wifiCfg,
+             TelemetrySettings& teleCfg,
              SettingsStore& store,
              WifiManager& wifi,
              TempSensor& sensor,
              AcDevice& ac,
              Thermostat& thermostat,
+             TelemetryManager& telemetry,
              EventLog& log);
   void update();
 
@@ -32,6 +35,7 @@ private:
   void handleConfig();
   void handleGetSettings();
   void handlePostSettings();
+  void handleTelemetryTest();
   void handleWifiScan();
   void handleDebugInfo();
   void handleDebugProps();
@@ -45,11 +49,13 @@ private:
   WebServer _server;
   AppSettings* _appCfg = nullptr;
   WifiSettings* _wifiCfg = nullptr;
+  TelemetrySettings* _teleCfg = nullptr;
   SettingsStore* _store = nullptr;
   WifiManager* _wifi = nullptr;
   TempSensor* _sensor = nullptr;
   AcDevice* _ac = nullptr;
   Thermostat* _thermostat = nullptr;
+  TelemetryManager* _telemetry = nullptr;
   EventLog* _log = nullptr;
 
   bool _rebootPending = false;

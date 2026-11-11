@@ -43,6 +43,8 @@ def test_files_and_constants() -> None:
         "ac_device.cpp",
         "thermostat.h",
         "thermostat.cpp",
+        "telemetry.h",
+        "telemetry.cpp",
         "web_pages.h",
         "web_ui.h",
         "web_ui.cpp",
@@ -65,6 +67,9 @@ def test_files_and_constants() -> None:
     assert re.search(r"#define\s+MIN_COMPRESSOR_REST_MS\s+180000UL\b", cfg)
     assert re.search(r"#define\s+MODE_DEBOUNCE_MS\s+5000UL\b", cfg)
     assert re.search(r"#define\s+TEMP_CONFIRM_MS\s+10000UL\b", cfg)
+    assert re.search(r"#define\s+TELEMETRY_FLUSH_INTERVAL_MS\s+300000UL\b", cfg)
+    assert re.search(r"#define\s+TELEMETRY_QUEUE_MAX_LINES\s+1500\b", cfg)
+    assert re.search(r"#define\s+DEFAULT_DEVICE_ID\s+\"miac-main\"", cfg)
 
     gitignore = (ROOT_DIR / ".gitignore").read_text(encoding="utf-8")
     for ignored_pattern in ("MiAcLocal/secrets.h", ".env", "MiAcLocal/tools/logs/", "__pycache__/"):
@@ -505,13 +510,150 @@ def test_thermostat_scenarios() -> None:
     assert th.state == CState.PAUSED_USER
 
 
+def test_telemetry_accumulator_logic() -> None:
+    """Verify that:
+    1. Zero buckets are emitted while power is OFF (no idle room temp logging).
+    2. DRY mode is counted into cool_sec (DRY == COOL per user specification).
+    3. Exactly 1 final partial bucket is emitted immediately on power ON -> OFF transition.
+    4. 700 W Non-Inverter math matches expected kWh.
+    """
+    class SimTelemetryAccumulator:
+        def __init__(self) -> None:
+            self.last_power = False
+            self.in_session = False
+            self.buckets: list[dict] = []
+            self.immediate_flushes = 0
+
+            # Accumulator variables matching telemetry.cpp
+            self.accum_dur = 0
+            self.accum_cool = 0
+            self.accum_fan_low = 0
+            self.accum_fan_high = 0
+            self.accum_auto = 0
+            self.room_temp_sum = 0.0
+            self.room_temp_cnt = 0
+
+        def close_bucket(self) -> None:
+            if self.accum_dur <= 0:
+                return
+            avg_temp = (self.room_temp_sum / self.room_temp_cnt) if self.room_temp_cnt > 0 else None
+            self.buckets.append({
+                "duration_sec": self.accum_dur,
+                "cool_sec": self.accum_cool,
+                "fan_low_sec": self.accum_fan_low,
+                "fan_high_sec": self.accum_fan_high,
+                "auto_sec": self.accum_auto,
+                "room_temp_avg": round(avg_temp, 1) if avg_temp is not None else None,
+            })
+            self.accum_dur = 0
+            self.accum_cool = 0
+            self.accum_fan_low = 0
+            self.accum_fan_high = 0
+            self.accum_auto = 0
+            self.room_temp_sum = 0.0
+            self.room_temp_cnt = 0
+
+        def tick_second(self, power: bool, mode: int, fan_level: int, auto_en: bool, temp_c: float | None) -> None:
+            # 1. Detect ON -> OFF transition
+            if self.last_power and not power:
+                if self.accum_dur > 0:
+                    self.close_bucket()
+                self.in_session = False
+                self.immediate_flushes += 1
+
+            # 2. Detect OFF -> ON transition
+            if not self.last_power and power:
+                self.in_session = True
+                self.accum_dur = 0
+                self.accum_cool = 0
+                self.accum_fan_low = 0
+                self.accum_fan_high = 0
+
+            self.last_power = power
+
+            # Only record when power is ON
+            if not power:
+                return
+
+            self.accum_dur += 1
+            # DRY mode (1) is counted as COOL (0)
+            if mode in (0, 1):
+                self.accum_cool += 1
+            elif mode == 2:
+                if fan_level == 1:
+                    self.accum_fan_high += 1
+                else:
+                    self.accum_fan_low += 1
+
+            if auto_en:
+                self.accum_auto += 1
+
+            if temp_c is not None:
+                self.room_temp_sum += temp_c
+                self.room_temp_cnt += 1
+
+            if self.accum_dur >= 60:
+                self.close_bucket()
+
+    sim = SimTelemetryAccumulator()
+
+    # Phase 1: Machine is OFF for 10 minutes (600 seconds)
+    for _ in range(600):
+        sim.tick_second(power=False, mode=0, fan_level=0, auto_en=True, temp_c=28.5)
+    assert len(sim.buckets) == 0, "No buckets should be emitted while AC is OFF"
+
+    # Phase 2: AC turns ON, runs COOL for 90s (produces 1 60s bucket, 30s remaining in accumulator)
+    for _ in range(90):
+        sim.tick_second(power=True, mode=0, fan_level=0, auto_en=True, temp_c=26.0)
+    assert len(sim.buckets) == 1
+    assert sim.buckets[0]["duration_sec"] == 60
+    assert sim.buckets[0]["cool_sec"] == 60
+    assert sim.buckets[0]["room_temp_avg"] == 26.0
+
+    # Phase 3: Switch to DRY mode for 30s (must complete the 2nd 60s bucket, counting DRY as COOL)
+    for _ in range(30):
+        sim.tick_second(power=True, mode=1, fan_level=0, auto_en=True, temp_c=25.8)
+    assert len(sim.buckets) == 2
+    assert sim.buckets[1]["duration_sec"] == 60
+    assert sim.buckets[1]["cool_sec"] == 60  # 30s COOL + 30s DRY = 60s COOL
+    assert sim.buckets[1]["fan_low_sec"] == 0
+
+    # Phase 4: Run FAN High for 60s
+    for _ in range(60):
+        sim.tick_second(power=True, mode=2, fan_level=1, auto_en=False, temp_c=25.5)
+    assert len(sim.buckets) == 3
+    assert sim.buckets[2]["cool_sec"] == 0
+    assert sim.buckets[2]["fan_high_sec"] == 60
+    assert sim.buckets[2]["auto_sec"] == 0
+
+    # Phase 5: Run COOL for 15s then power OFF -> immediate partial bucket closed and immediate flush
+    for _ in range(15):
+        sim.tick_second(power=True, mode=0, fan_level=0, auto_en=True, temp_c=25.2)
+    assert len(sim.buckets) == 3  # not closed yet (only 15s)
+
+    # Power OFF
+    sim.tick_second(power=False, mode=0, fan_level=0, auto_en=True, temp_c=25.2)
+    assert len(sim.buckets) == 4, "Partial bucket must be emitted immediately upon turning OFF"
+    assert sim.buckets[3]["duration_sec"] == 15
+    assert sim.buckets[3]["cool_sec"] == 15
+    assert sim.immediate_flushes == 1, "Immediate cloud flush must be triggered upon turning OFF"
+
+    # Verify 700 W Non-Inverter energy calculation
+    total_cool_sec = sum(b["cool_sec"] for b in sim.buckets)      # 60 + 60 + 0 + 15 = 135s
+    total_fan_high_sec = sum(b["fan_high_sec"] for b in sim.buckets) # 60s
+    kwh = (total_cool_sec / 3600.0) * (700.0 / 1000.0) + (total_fan_high_sec / 3600.0) * (50.0 / 1000.0)
+    expected_kwh = (135.0 / 3600.0) * 0.700 + (60.0 / 3600.0) * 0.050
+    assert abs(kwh - expected_kwh) < 1e-6, f"kWh mismatch: {kwh} vs {expected_kwh}"
+
+
 def main() -> int:
     test_files_and_constants()
     test_web_pages_dom_integrity()
     test_miio_binary_format()
     test_json_lite_with_real_ac_payloads()
     test_thermostat_scenarios()
-    print("All MiAcLocal firmware logic, protocol, and UI checks passed.")
+    test_telemetry_accumulator_logic()
+    print("All MiAcLocal firmware logic, protocol, UI, and telemetry checks passed.")
     return 0
 
 

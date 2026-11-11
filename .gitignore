@@ -17,12 +17,14 @@ __pycache__/
 .venv/
 venv/
 
-# Arduino / ESP32 build outputs
+# Arduino / ESP32 / Go build outputs
 build/
 *.bin
 *.elf
 *.map
 *.hex
+*.exe
+MiAcStats/.env
 
 # Editor and OS files
 .vscode/

@@ -9,19 +9,23 @@ WebUi::WebUi()
 
 void WebUi::begin(AppSettings& appCfg,
                   WifiSettings& wifiCfg,
+                  TelemetrySettings& teleCfg,
                   SettingsStore& store,
                   WifiManager& wifi,
                   TempSensor& sensor,
                   AcDevice& ac,
                   Thermostat& thermostat,
+                  TelemetryManager& telemetry,
                   EventLog& log) {
   _appCfg = &appCfg;
   _wifiCfg = &wifiCfg;
+  _teleCfg = &teleCfg;
   _store = &store;
   _wifi = &wifi;
   _sensor = &sensor;
   _ac = &ac;
   _thermostat = &thermostat;
+  _telemetry = &telemetry;
   _log = &log;
 
   registerRoutes();
@@ -61,6 +65,7 @@ void WebUi::registerRoutes() {
   _server.on("/api/config", HTTP_POST, [this]() { handleConfig(); });
   _server.on("/api/settings", HTTP_GET, [this]() { handleGetSettings(); });
   _server.on("/api/settings", HTTP_POST, [this]() { handlePostSettings(); });
+  _server.on("/api/telemetry/test", HTTP_POST, [this]() { handleTelemetryTest(); });
   _server.on("/api/wifi/scan", HTTP_GET, [this]() { handleWifiScan(); });
   _server.on("/api/debug/info", HTTP_GET, [this]() { handleDebugInfo(); });
   _server.on("/api/debug/props", HTTP_GET, [this]() { handleDebugProps(); });
@@ -153,6 +158,16 @@ void WebUi::handleState() {
   j += ",\"lockRemSec\":"; j += String(_thermostat->lockRemainingSec());
   j += ",\"modeVerifyFailed\":"; j += (_thermostat->modeVerifyFailed() ? "true" : "false");
   j += ",\"acError\":\""; j += JsonLite::escapeString(ac.lastError); j += "\"";
+
+  if (_telemetry) {
+    TelemetryStatus ts = _telemetry->getStatus();
+    j += ",\"teleEnabled\":"; j += (ts.enabled ? "true" : "false");
+    j += ",\"telePending\":"; j += String(ts.pendingCount);
+    j += ",\"teleLastSyncAgoSec\":"; j += String(ts.lastSyncAgoSec);
+    j += ",\"teleNtpSynced\":"; j += (ts.ntpSynced ? "true" : "false");
+    j += ",\"teleLastError\":\""; j += JsonLite::escapeString(ts.lastError); j += "\"";
+  }
+
   j += ",\"logs\":"; j += _log->toJsonArray();
   j += "}";
 
@@ -313,6 +328,12 @@ void WebUi::handleGetSettings() {
   j += ",\"gateway\":\""; j += JsonLite::escapeString(_wifiCfg->gateway); j += "\"";
   j += ",\"subnet\":\""; j += JsonLite::escapeString(_wifiCfg->subnet); j += "\"";
   j += ",\"dns\":\""; j += JsonLite::escapeString(_wifiCfg->dns); j += "\"";
+  if (_teleCfg) {
+    j += ",\"teleEnabled\":"; j += (_teleCfg->enabled ? "true" : "false");
+    j += ",\"teleUrl\":\""; j += JsonLite::escapeString(_teleCfg->url); j += "\"";
+    j += ",\"teleDeviceId\":\""; j += JsonLite::escapeString(_teleCfg->deviceId); j += "\"";
+    j += ",\"teleTokenSet\":"; j += (_teleCfg->token.length() > 0 ? "true" : "false");
+  }
   j += "}";
   _server.send(200, "application/json", j);
 }
@@ -429,16 +450,102 @@ void WebUi::handlePostSettings() {
     updatedWifi = true;
   }
 
-  if (!updatedAc && !updatedWifi) {
+  // Validate & apply Cloud Telemetry configuration if any tele field is present
+  bool updatedTele = false;
+  if (_teleCfg && (_server.hasArg("teleEnabled") || _server.hasArg("teleUrl") ||
+      _server.hasArg("teleToken") || _server.hasArg("teleDeviceId"))) {
+    TelemetrySettings nextTele = *_teleCfg;
+
+    if (_server.hasArg("teleEnabled")) {
+      bool en = false;
+      if (!parseStrictBool(_server.arg("teleEnabled"), en)) {
+        _server.send(400, "text/plain", "Invalid teleEnabled value");
+        return;
+      }
+      nextTele.enabled = en;
+    }
+
+    if (_server.hasArg("teleUrl")) {
+      String u = _server.arg("teleUrl");
+      u.trim();
+      nextTele.url = SettingsStore::normalizeTursoUrl(u);
+    }
+
+    if (_server.hasArg("teleDeviceId")) {
+      String devId = _server.arg("teleDeviceId");
+      devId.trim();
+      if (devId.length() > 0) {
+        if (!SettingsStore::isValidDeviceId(devId)) {
+          _server.send(400, "text/plain", "Device ID must be alphanumeric/dash/underscore (max 32 chars)");
+          return;
+        }
+        nextTele.deviceId = devId;
+      }
+    }
+
+    if (_server.hasArg("teleToken")) {
+      String tok = _server.arg("teleToken");
+      tok.trim();
+      if (tok.length() > 0) {
+        nextTele.token = tok;
+      }
+    }
+
+    *_teleCfg = nextTele;
+    _store->saveTelemetry(*_teleCfg);
+    if (_telemetry) {
+      _telemetry->reconfigure(*_teleCfg);
+    }
+    _log->add("Telemetry settings updated (enabled=" + String(nextTele.enabled ? "YES" : "NO") +
+              ", dev=" + nextTele.deviceId + ")");
+    updatedTele = true;
+  }
+
+  if (!updatedAc && !updatedWifi && !updatedTele) {
     _server.send(400, "text/plain", "No settings provided");
     return;
   }
 
   if (updatedWifi) {
     _server.send(200, "text/plain", "Wi-Fi settings saved. Rebooting to http://" + _wifiCfg->staticIp + " ...");
+  } else if (updatedTele && !updatedAc) {
+    _server.send(200, "text/plain", "Telemetry settings saved.");
   } else {
-    _server.send(200, "text/plain", "AC settings saved.");
+    _server.send(200, "text/plain", "Settings saved.");
   }
+}
+
+void WebUi::handleTelemetryTest() {
+  if (!_teleCfg) {
+    _server.send(500, "application/json", "{\"ok\":false,\"error\":\"Telemetry not configured\"}");
+    return;
+  }
+
+  String url = _teleCfg->url;
+  String token = _teleCfg->token;
+
+  if (_server.hasArg("url")) {
+    String u = _server.arg("url");
+    u.trim();
+    if (u.length() > 0) url = SettingsStore::normalizeTursoUrl(u);
+  }
+
+  if (_server.hasArg("token")) {
+    String t = _server.arg("token");
+    t.trim();
+    if (t.length() > 0) token = t;
+  }
+
+  if (url.length() == 0 || token.length() == 0) {
+    _server.send(400, "application/json", "{\"ok\":false,\"error\":\"Turso URL and Token cannot be empty\"}");
+    return;
+  }
+
+  String errOut;
+  bool ok = TelemetryManager::testConnection(url, token, errOut);
+  String j = "{\"ok\":" + String(ok ? "true" : "false") + ",\"message\":\"" +
+             JsonLite::escapeString(errOut) + "\"}";
+  _server.send(ok ? 200 : 502, "application/json", j);
 }
 
 void WebUi::handleWifiScan() {
@@ -529,6 +636,9 @@ void WebUi::handleDebugSet() {
 
 void WebUi::handleReboot() {
   _log->add("Reboot requested via Web UI");
+  if (_telemetry) {
+    _telemetry->flushNow();
+  }
   _rebootPending = true;
   _rebootAtMs = millis() + 500UL;
   _server.send(200, "text/plain", "Rebooting ESP32...");

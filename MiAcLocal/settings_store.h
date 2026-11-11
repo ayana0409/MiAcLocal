@@ -25,6 +25,13 @@ struct WifiSettings {
   String dns = DEFAULT_DNS;
 };
 
+struct TelemetrySettings {
+  bool enabled = false;
+  String url = DEFAULT_TURSO_URL;
+  String token = DEFAULT_TURSO_TOKEN;
+  String deviceId = DEFAULT_DEVICE_ID;
+};
+
 // Persistent NVS storage wrapper (writes only when values change).
 class SettingsStore {
 public:
@@ -35,9 +42,14 @@ public:
   void saveWifi(const WifiSettings& cfg);
   void clearWifi();
 
+  void loadTelemetry(TelemetrySettings& out);
+  void saveTelemetry(const TelemetrySettings& cfg);
+
   static int clampTarget(int targetC);
   static float sanitizeGap(float gapC);
   static bool isValidIp(const String& ipStr);
   static bool isValidToken(const String& tokenHex);
+  static String normalizeTursoUrl(const String& raw);
+  static bool isValidDeviceId(const String& id);
 };
 

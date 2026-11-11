@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>MiAcStats — AC Runtime & Electricity Analytics</title>
+  <style>
+    :root {
+      --bg-light: #f4f6f9;
+      --surface-light: #ffffff;
+      --surface-alt-light: #eef2f6;
+      --border-light: #d0d7de;
+      --text-light: #1f2328;
+      --muted-light: #57606a;
+      --cool-light: #0969da;
+      --fan-light: #1a7f37;
+      --warn-light: #9a6700;
+      --err-light: #cf222e;
+      --err-bg-light: #ffebe9;
+
+      --bg-dark: #0d1117;
+      --surface-dark: #161b22;
+      --surface-alt-dark: #1f2630;
+      --border-dark: #30363d;
+      --text-dark: #e6edf3;
+      --muted-dark: #8b949e;
+      --cool-dark: #58a6ff;
+      --fan-dark: #3fb950;
+      --warn-dark: #d29922;
+      --err-dark: #ff7b72;
+      --err-bg-dark: #3d1417;
+
+      --bg: var(--bg-light);
+      --surface: var(--surface-light);
+      --surface-alt: var(--surface-alt-light);
+      --border: var(--border-light);
+      --text: var(--text-light);
+      --muted: var(--muted-light);
+      --cool: var(--cool-light);
+      --fan: var(--fan-light);
+      --warn: var(--warn-light);
+      --err: var(--err-light);
+      --err-bg: var(--err-bg-light);
+      --scrollbar-track: #e6ebf1;
+      --scrollbar-thumb: #6b7280;
+
+      color-scheme: light dark;
+      accent-color: var(--cool);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: var(--bg-dark);
+        --surface: var(--surface-dark);
+        --surface-alt: var(--surface-alt-dark);
+        --border: var(--border-dark);
+        --text: var(--text-dark);
+        --muted: var(--muted-dark);
+        --cool: var(--cool-dark);
+        --fan: var(--fan-dark);
+        --warn: var(--warn-dark);
+        --err: var(--err-dark);
+        --err-bg: var(--err-bg-dark);
+        --scrollbar-track: #161b22;
+        --scrollbar-thumb: #6e7681;
+      }
+    }
+
+    @supports (color: light-dark(white, black)) {
+      :root {
+        --bg: light-dark(var(--bg-light), var(--bg-dark));
+        --surface: light-dark(var(--surface-light), var(--surface-dark));
+        --surface-alt: light-dark(var(--surface-alt-light), var(--surface-alt-dark));
+        --border: light-dark(var(--border-light), var(--border-dark));
+        --text: light-dark(var(--text-light), var(--text-dark));
+        --muted: light-dark(var(--muted-light), var(--muted-dark));
+        --cool: light-dark(var(--cool-light), var(--cool-dark));
+        --fan: light-dark(var(--fan-light), var(--fan-dark));
+        --warn: light-dark(var(--warn-light), var(--warn-dark));
+        --err: light-dark(var(--err-light), var(--err-dark));
+        --err-bg: light-dark(var(--err-bg-light), var(--err-bg-dark));
+        --scrollbar-track: light-dark(#e6ebf1, #161b22);
+        --scrollbar-thumb: light-dark(#6b7280, #6e7681);
+      }
+    }
+
+    :root {
+      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 1.25rem;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+    }
+
+    main {
+      max-width: 1140px;
+      margin: 0 auto;
+      display: grid;
+      gap: 1rem;
+    }
+
+    header.topbar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    h1 { font-size: 1.35rem; margin: 0; }
+    h2 { font-size: 1.05rem; margin: 0 0 0.75rem 0; }
+    .muted { color: var(--muted); font-size: 0.875rem; }
+
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      background: var(--surface-alt);
+    }
+
+    .badge-demo { border-color: var(--warn); color: var(--warn); }
+    .badge-active { border-color: var(--cool); color: var(--cool); }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1rem;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: end;
+      gap: 0.75rem;
+    }
+
+    .presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+      margin-inline-start: auto;
+    }
+
+    button {
+      font: inherit;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 0.45rem 0.8rem;
+      border-radius: 0.5rem;
+      border: 1px solid var(--border);
+      background: var(--surface-alt);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    button.primary {
+      background: var(--cool);
+      color: #ffffff;
+      border-color: transparent;
+    }
+
+    button:hover { opacity: 0.92; }
+
+    .grid-kpi {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(195px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .kpi-label { font-size: 0.8rem; color: var(--muted); }
+    .kpi-value { font-size: 1.5rem; font-weight: 700; margin-top: 0.15rem; font-variant-numeric: tabular-nums; }
+    .kpi-sub { font-size: 0.8rem; color: var(--muted); margin-top: 0.25rem; }
+
+    .cool-text { color: var(--cool); }
+    .fan-text { color: var(--fan); }
+
+    .bar-chart {
+      display: grid;
+      grid-template-columns: repeat(24, minmax(0, 1fr));
+      gap: 0.25rem;
+      align-items: end;
+      height: 130px;
+      padding-top: 0.5rem;
+    }
+
+    .hour-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100%;
+      justify-content: flex-end;
+      gap: 0.25rem;
+    }
+
+    .hour-stack {
+      width: 100%;
+      max-width: 24px;
+      display: flex;
+      flex-direction: column-reverse;
+      background: var(--surface-alt);
+      border-radius: 4px;
+      overflow: hidden;
+      height: 105px;
+      justify-content: flex-start;
+    }
+
+    .seg-cool { background: var(--cool); width: 100%; }
+    .seg-fan { background: var(--fan); width: 100%; }
+    .hour-label { font-size: 0.68rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+    /* Responsive tables */
+    .table-wrapper {
+      overflow: auto;
+      max-inline-size: 100%;
+      max-block-size: min(420px, 60vh);
+      container-type: inline-size;
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 0.86rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    th, td {
+      padding: 0.55rem 0.7rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    thead th {
+      position: sticky;
+      inset-block-start: 0;
+      z-index: 2;
+      background: var(--surface-alt);
+      font-weight: 600;
+    }
+
+    tbody th {
+      position: sticky;
+      inset-inline-start: 0;
+      z-index: 1;
+      background: var(--surface);
+      font-weight: 600;
+    }
+
+    /* Form fields */
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0.85rem;
+    }
+
+    .field { display: flex; flex-direction: column; gap: 0.25rem; }
+    label { font-size: 0.85rem; font-weight: 600; }
+    .hint { font-size: 0.76rem; color: var(--muted); }
+
+    input, select {
+      font: inherit;
+      font-size: 0.88rem;
+      padding: 0.45rem 0.6rem;
+      border-radius: 0.45rem;
+      border: 1px solid var(--border);
+      background: var(--surface-alt);
+      color: var(--text);
+    }
+
+    .error-msg { display: none; color: var(--err); font-size: 0.78rem; }
+
+    :is(input:user-invalid, select:user-invalid, .user-invalid-fallback) {
+      border-color: var(--err);
+      background-color: var(--err-bg);
+    }
+    :is(input:user-invalid, select:user-invalid, .user-invalid-fallback) + .error-msg {
+      display: block;
+    }
+
+    .actions-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+      margin-top: 0.9rem;
+    }
+
+    .status-line { font-size: 0.85rem; color: var(--muted); }
+
+    .visually-hidden:where(:not(:focus-within, :active)) {
+      position: absolute !important;
+      clip-path: inset(50%) !important;
+      overflow: hidden !important;
+      width: 1px !important;
+      height: 1px !important;
+      margin: -1px !important;
+      padding: 0 !important;
+      border: 0 !important;
+      white-space: nowrap !important;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="topbar">
+      <div>
+        <h1>MiAcStats — AC Runtime & Electricity Analytics</h1>
+        <div class="muted" id="subtitle">Non-Inverter 700 W profile (DRY counted as COOL, no idle logging)</div>
+      </div>
+      <div style="display:flex; gap:0.5rem; align-items:center;">
+        <span class="badge" id="tz-badge">UTC+7</span>
+        <span class="badge badge-demo" id="demo-badge" hidden>DEMO DATA</span>
+      </div>
+    </header>
+
+    <section class="card" aria-label="Date & Time filter">
+      <div class="controls">
+        <div class="field">
+          <label for="from-dt">From Date &amp; Time</label>
+          <input id="from-dt" type="datetime-local" required data-error="from-dt-err">
+          <span id="from-dt-err" class="error-msg">Error: Pick valid start date &amp; time.</span>
+        </div>
+        <div class="field">
+          <label for="to-dt">To Date &amp; Time</label>
+          <input id="to-dt" type="datetime-local" required data-error="to-dt-err">
+          <span id="to-dt-err" class="error-msg">Error: Pick valid end date &amp; time.</span>
+        </div>
+        <button id="apply-btn" class="primary" type="button">Apply Filter</button>
+
+        <div class="presets">
+          <button type="button" data-preset="today">Today</button>
+          <button type="button" data-preset="lastnight">Last Night (18:00–12:00)</button>
+          <button type="button" data-preset="7d">Last 7 Days</button>
+          <button type="button" data-preset="month">This Month (1–End)</button>
+          <button type="button" data-preset="lastmonth">Last Month</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid-kpi" aria-label="Summary metrics">
+      <div class="card">
+        <div class="kpi-label">COOL Runtime</div>
+        <div class="kpi-value cool-text" id="kpi-cool">--</div>
+        <div class="kpi-sub" id="kpi-cool-sub">--</div>
+      </div>
+      <div class="card">
+        <div class="kpi-label">FAN Runtime</div>
+        <div class="kpi-value fan-text" id="kpi-fan">--</div>
+        <div class="kpi-sub" id="kpi-fan-sub">--</div>
+      </div>
+      <div class="card">
+        <div class="kpi-label">Room Temperature</div>
+        <div class="kpi-value" id="kpi-temp">--</div>
+        <div class="kpi-sub" id="kpi-temp-sub">--</div>
+      </div>
+      <div class="card">
+        <div class="kpi-label">Estimated Energy</div>
+        <div class="kpi-value" id="kpi-kwh">--</div>
+        <div class="kpi-sub" id="kpi-kwh-sub">--</div>
+      </div>
+      <div class="card">
+        <div class="kpi-label">Estimated Cost</div>
+        <div class="kpi-value" id="kpi-cost">--</div>
+        <div class="kpi-sub" id="kpi-cost-sub">--</div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="sessions-title">
+      <h2 id="sessions-title">Active &amp; Past Run Sessions (Power ON → OFF)</h2>
+      <div tabindex="0" role="region" aria-labelledby="sessions-title" class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Session</th>
+              <th scope="col">Start Time</th>
+              <th scope="col">End Time</th>
+              <th scope="col">Duration</th>
+              <th scope="col">COOL</th>
+              <th scope="col">FAN</th>
+              <th scope="col">Room Avg (Min/Max)</th>
+              <th scope="col">Target</th>
+              <th scope="col">Energy</th>
+              <th scope="col">Est. Cost</th>
+              <th scope="col">Auto Mode</th>
+            </tr>
+          </thead>
+          <tbody id="sessions-tbody">
+            <tr><td colspan="11" class="muted">Loading sessions...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="daily-title">
+      <h2 id="daily-title">Calendar Daily Breakdown (00:00 – 23:59)</h2>
+      <div tabindex="0" role="region" aria-labelledby="daily-title" class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Running Intervals</th>
+              <th scope="col">Total Run</th>
+              <th scope="col">COOL</th>
+              <th scope="col">FAN</th>
+              <th scope="col">Room Avg (Min/Max)</th>
+              <th scope="col">Energy</th>
+              <th scope="col">Est. Cost</th>
+              <th scope="col">Sessions</th>
+            </tr>
+          </thead>
+          <tbody id="daily-tbody">
+            <tr><td colspan="9" class="muted">Loading daily statistics...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="hourly-title">
+      <h2 id="hourly-title">24-Hour Distribution (Local Time)</h2>
+      <div class="muted" style="margin-bottom:0.5rem;">Blue = COOL, Green = FAN</div>
+      <div id="hourly-chart" class="bar-chart"></div>
+    </section>
+
+    <section class="card" aria-labelledby="billing-title">
+      <h2 id="billing-title">Non-Inverter Wattage &amp; Tariff Calculator</h2>
+      <form id="settings-form" novalidate>
+        <div class="form-grid">
+          <div class="field">
+            <label for="cool-watts">COOL / DRY Power (W)</label>
+            <span id="cool-watts-hint" class="hint">Rated 700 W from AC nameplate</span>
+            <input id="cool-watts" name="coolWatts" type="number" min="100" max="5000" step="1" required aria-describedby="cool-watts-hint" data-error="cool-watts-err">
+            <span id="cool-watts-err" class="error-msg">Error: Enter 100–5000 W.</span>
+          </div>
+
+          <div class="field">
+            <label for="fan-low-watts">FAN Low (W)</label>
+            <span id="fan-low-hint" class="hint">Fan-only on Low speed (~30 W)</span>
+            <input id="fan-low-watts" name="fanLowWatts" type="number" min="0" max="1000" step="1" required aria-describedby="fan-low-hint" data-error="fan-low-err">
+            <span id="fan-low-err" class="error-msg">Error: Enter 0–1000 W.</span>
+          </div>
+
+          <div class="field">
+            <label for="fan-high-watts">FAN High (W)</label>
+            <span id="fan-high-hint" class="hint">Fan-only on High speed (~50 W)</span>
+            <input id="fan-high-watts" name="fanHighWatts" type="number" min="0" max="1000" step="1" required aria-describedby="fan-high-hint" data-error="fan-high-err">
+            <span id="fan-high-err" class="error-msg">Error: Enter 0–1000 W.</span>
+          </div>
+
+          <div class="field">
+            <label for="tariff-mode">Tariff Mode</label>
+            <span id="tariff-hint" class="hint">EVN progressive or flat rate</span>
+            <select id="tariff-mode" name="tariffMode" aria-describedby="tariff-hint">
+              <option value="evn">EVN 6-Tier Progressive</option>
+              <option value="flat">Flat Rate (VND/kWh)</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="base-kwh">Household Base kWh</label>
+            <span id="base-kwh-hint" class="hint">Other household kWh before AC tier</span>
+            <input id="base-kwh" name="baseHomeKWh" type="number" min="0" max="5000" step="1" required aria-describedby="base-kwh-hint" data-error="base-kwh-err">
+            <span id="base-kwh-err" class="error-msg">Error: Enter non-negative kWh.</span>
+          </div>
+
+          <div class="field">
+            <label for="flat-rate">Flat Rate (VND/kWh)</label>
+            <span id="flat-rate-hint" class="hint">Used when Flat mode is active</span>
+            <input id="flat-rate" name="flatRateVND" type="number" min="0" max="20000" step="1" required aria-describedby="flat-rate-hint" data-error="flat-rate-err">
+            <span id="flat-rate-err" class="error-msg">Error: Enter valid VND/kWh rate.</span>
+          </div>
+
+          <div class="field">
+            <label for="vat-pct">VAT (%)</label>
+            <span id="vat-hint" class="hint">Standard 8% or 10%</span>
+            <input id="vat-pct" name="vatPercent" type="number" min="0" max="100" step="0.5" required aria-describedby="vat-hint" data-error="vat-err">
+            <span id="vat-err" class="error-msg">Error: Enter 0–100%.</span>
+          </div>
+        </div>
+
+        <div class="actions-row">
+          <button class="primary" type="submit">Save &amp; Recalculate</button>
+          <span class="status-line" id="save-status"></span>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      let currentSettings = null;
+
+      const announcer = document.createElement('div');
+      announcer.setAttribute('aria-live', 'polite');
+      announcer.classList.add('visually-hidden');
+      document.body.append(announcer);
+      let announceTimer;
+
+      const linkError = (el, shown) => {
+        const errId = el.dataset.error;
+        if (!errId) return;
+        const ids = (el.getAttribute('aria-describedby') || '').split(/\s+/).filter((x) => x && x !== errId);
+        if (shown) ids.push(errId);
+        if (ids.length) el.setAttribute('aria-describedby', ids.join(' '));
+        else el.removeAttribute('aria-describedby');
+      };
+
+      const syncValidation = (el, announce) => {
+        if (!el.matches?.('input, select')) return;
+        const supportsUserInvalid = CSS.supports('selector(:user-invalid)');
+        const invalid = supportsUserInvalid ? el.matches(':user-invalid') : !el.validity.valid;
+        if (!supportsUserInvalid) {
+          el.classList.toggle('user-invalid-fallback', invalid);
+        }
+        el.setAttribute('aria-invalid', invalid ? 'true' : 'false');
+        linkError(el, invalid);
+        if (invalid && announce && el.dataset.error) {
+          const msg = $(el.dataset.error)?.textContent?.trim() || '';
+          clearTimeout(announceTimer);
+          announceTimer = setTimeout(() => { announcer.textContent = msg; }, 350);
+        }
+      };
+
+      document.querySelectorAll('input, select').forEach((el) => el.setAttribute('aria-invalid', 'false'));
+      document.addEventListener('blur', (e) => syncValidation(e.target, true), true);
+      document.addEventListener('input', (e) => {
+        if (e.target.getAttribute('aria-invalid') === 'true') syncValidation(e.target, false);
+      });
+
+      const fmtVND = (n) => new Intl.NumberFormat('vi-VN').format(Math.round(n || 0)) + ' VND';
+      const fmtNum = (n, d = 1) => (n === null || n === undefined) ? '--' : Number(n).toFixed(d);
+      const pad2 = (n) => String(n).padStart(2, '0');
+      const fmtDTLocal = (dt) => {
+        return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}T${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
+      };
+
+      function applyPreset(preset) {
+        const now = new Date();
+        let from = new Date(now);
+        let to = new Date(now);
+
+        if (preset === 'today') {
+          from = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+          to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+        } else if (preset === 'lastnight') {
+          // 18:00 yesterday to 12:00 noon today
+          from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 18, 0, 0);
+          to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0);
+        } else if (preset === '7d') {
+          from = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
+        } else if (preset === 'month') {
+          // Day 1 of month 00:00 to end of month 23:59
+          from = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+          to = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+        } else if (preset === 'lastmonth') {
+          from = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0);
+          to = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+        }
+
+        $('from-dt').value = fmtDTLocal(from);
+        $('to-dt').value = fmtDTLocal(to);
+        loadStats();
+      }
+
+      document.querySelectorAll('[data-preset]').forEach((btn) => {
+        btn.addEventListener('click', () => applyPreset(btn.dataset.preset));
+      });
+      $('apply-btn').addEventListener('click', loadStats);
+
+      async function loadStats() {
+        const params = new URLSearchParams();
+        if ($('from-dt').value) params.set('from', $('from-dt').value);
+        if ($('to-dt').value) params.set('to', $('to-dt').value);
+
+        const resp = await fetch('/api/stats?' + params.toString());
+        const data = await resp.json();
+        if (!resp.ok) {
+          $('save-status').textContent = data.error || 'Failed to load stats';
+          return;
+        }
+        renderDashboard(data);
+      }
+
+      function renderDashboard(data) {
+        currentSettings = data.settings;
+        $('from-dt').value = data.from_datetime;
+        $('to-dt').value = data.to_datetime;
+        $('tz-badge').textContent = data.timezone;
+        $('demo-badge').hidden = !data.demo_mode;
+        $('subtitle').textContent = `Device: ${data.device_id} | ${data.summary.session_count} run sessions (${data.summary.bucket_count} buckets)`;
+
+        const s = data.summary;
+        $('kpi-cool').textContent = `${fmtNum(s.cool_hours, 2)} h`;
+        $('kpi-cool-sub').textContent = `${fmtNum(s.cool_share_pct, 1)}% of run time (${fmtNum(s.auto_share_pct, 1)}% Auto)`;
+        $('kpi-fan').textContent = `${fmtNum(s.fan_hours, 2)} h`;
+        $('kpi-fan-sub').textContent = `Total Run: ${fmtNum(s.total_run_hours, 2)} h`;
+        $('kpi-temp').textContent = s.avg_room_temp !== undefined ? `${fmtNum(s.avg_room_temp, 1)} °C` : '--';
+        $('kpi-temp-sub').textContent = `COOL avg: ${fmtNum(s.cool_avg_room_temp, 1)} °C (${fmtNum(s.min_room_temp, 1)}–${fmtNum(s.max_room_temp, 1)} °C)`;
+        $('kpi-kwh').textContent = `${fmtNum(s.total_kwh, 2)} kWh`;
+        $('kpi-kwh-sub').textContent = `COOL ${fmtNum(s.cool_kwh, 2)} + FAN ${fmtNum(s.fan_kwh, 2)} kWh`;
+        $('kpi-cost').textContent = fmtVND(s.total_cost_vnd);
+        $('kpi-cost-sub').textContent = `Avg rate: ${fmtVND(s.effective_rate_vnd)}/kWh`;
+
+        // Render Sessions Table
+        const sTbody = $('sessions-tbody');
+        sTbody.replaceChildren();
+        if (!data.sessions || data.sessions.length === 0) {
+          const tr = document.createElement('tr');
+          const td = document.createElement('td');
+          td.colSpan = 11;
+          td.className = 'muted';
+          td.textContent = 'No AC run sessions recorded in this time range.';
+          tr.append(td);
+          sTbody.append(tr);
+        } else {
+          data.sessions.forEach((sn) => {
+            const tr = document.createElement('tr');
+            const th = document.createElement('th');
+            th.scope = 'row';
+            th.textContent = sn.session_id;
+            if (sn.is_active) {
+              const b = document.createElement('span');
+              b.className = 'badge badge-active';
+              b.style.marginLeft = '0.35rem';
+              b.textContent = 'RUNNING';
+              th.append(b);
+            }
+            tr.append(th);
+
+            const cells = [
+              sn.start_local,
+              sn.end_local,
+              `${fmtNum(sn.duration_hours, 2)} h`,
+              `${fmtNum(sn.cool_hours, 2)} h (${fmtNum(sn.cool_share_pct, 1)}%)`,
+              `${fmtNum(sn.fan_hours, 2)} h`,
+              sn.avg_room_temp !== undefined ? `${fmtNum(sn.avg_room_temp, 1)} °C (${fmtNum(sn.min_room_temp, 1)}–${fmtNum(sn.max_room_temp, 1)} °C)` : '--',
+              sn.avg_target_temp !== undefined ? `${fmtNum(sn.avg_target_temp, 0)} °C` : '--',
+              `${fmtNum(sn.total_kwh, 2)} kWh`,
+              fmtVND(sn.total_cost_vnd),
+              `${fmtNum(sn.auto_share_pct, 1)}%`,
+            ];
+            cells.forEach((text) => {
+              const td = document.createElement('td');
+              td.textContent = text;
+              tr.append(td);
+            });
+            sTbody.append(tr);
+          });
+        }
+
+        // Render Daily Table
+        const dTbody = $('daily-tbody');
+        dTbody.replaceChildren();
+        if (!data.daily || data.daily.length === 0) {
+          const tr = document.createElement('tr');
+          const td = document.createElement('td');
+          td.colSpan = 9;
+          td.className = 'muted';
+          td.textContent = 'No running records found in this time range.';
+          tr.append(td);
+          dTbody.append(tr);
+        } else {
+          data.daily.forEach((d) => {
+            const tr = document.createElement('tr');
+            const th = document.createElement('th');
+            th.scope = 'row';
+            th.textContent = d.date;
+            tr.append(th);
+
+            const cells = [
+              d.time_ranges,
+              `${fmtNum(d.total_hours, 2)} h`,
+              `${fmtNum(d.cool_hours, 2)} h`,
+              `${fmtNum(d.fan_hours, 2)} h`,
+              d.avg_room_temp !== undefined ? `${fmtNum(d.avg_room_temp, 1)} °C (${fmtNum(d.min_room_temp, 1)}–${fmtNum(d.max_room_temp, 1)} °C)` : '--',
+              `${fmtNum(d.total_kwh, 2)} kWh`,
+              fmtVND(d.total_cost_vnd),
+              String(d.session_count),
+            ];
+            cells.forEach((text) => {
+              const td = document.createElement('td');
+              td.textContent = text;
+              tr.append(td);
+            });
+            dTbody.append(tr);
+          });
+        }
+
+        // Render Hourly 24h chart
+        const maxHour = Math.max(0.1, ...data.hourly.map((h) => h.cool_hours + h.fan_hours));
+        const chart = $('hourly-chart');
+        chart.replaceChildren();
+        data.hourly.forEach((h) => {
+          const col = document.createElement('div');
+          col.className = 'hour-col';
+          col.title = `${pad2(h.hour)}:00 — COOL ${h.cool_hours.toFixed(2)}h, FAN ${h.fan_hours.toFixed(2)}h (${h.total_kwh.toFixed(2)} kWh)`;
+
+          const stack = document.createElement('div');
+          stack.className = 'hour-stack';
+          const coolBar = document.createElement('div');
+          coolBar.className = 'seg-cool';
+          coolBar.style.height = `${(h.cool_hours / maxHour) * 100}%`;
+          const fanBar = document.createElement('div');
+          fanBar.className = 'seg-fan';
+          fanBar.style.height = `${(h.fan_hours / maxHour) * 100}%`;
+          stack.append(coolBar, fanBar);
+
+          const lbl = document.createElement('span');
+          lbl.className = 'hour-label';
+          lbl.textContent = pad2(h.hour);
+          col.append(stack, lbl);
+          chart.append(col);
+        });
+
+        // Hydrate settings form
+        const cfg = data.settings;
+        $('cool-watts').value = cfg.cool_watts;
+        $('fan-low-watts').value = cfg.fan_low_watts;
+        $('fan-high-watts').value = cfg.fan_high_watts;
+        $('tariff-mode').value = cfg.tariff_mode;
+        $('base-kwh').value = cfg.base_home_kwh;
+        $('flat-rate').value = cfg.flat_rate_vnd;
+        $('vat-pct').value = cfg.vat_percent;
+      }
+
+      $('settings-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const form = ev.currentTarget;
+        const fields = [...form.querySelectorAll('input, select')];
+        if (!form.checkValidity()) {
+          fields.forEach((el) => syncValidation(el, false));
+          const firstInvalid = fields.find((el) => !el.validity.valid);
+          firstInvalid?.focus();
+          return;
+        }
+
+        const payload = {
+          cool_watts: Number($('cool-watts').value),
+          fan_low_watts: Number($('fan-low-watts').value),
+          fan_high_watts: Number($('fan-high-watts').value),
+          tariff_mode: $('tariff-mode').value,
+          base_home_kwh: Number($('base-kwh').value),
+          flat_rate_vnd: Number($('flat-rate').value),
+          vat_percent: Number($('vat-pct').value),
+          evn_tiers: currentSettings ? currentSettings.evn_tiers : [],
+        };
+
+        $('save-status').textContent = 'Saving...';
+        const resp = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const body = await resp.json();
+        if (!resp.ok) {
+          $('save-status').textContent = body.error || 'Failed to save settings';
+          return;
+        }
+        $('save-status').textContent = 'Saved and recalculated.';
+        await loadStats();
+      });
+
+      loadStats();
+    })();
+  </script>
+</body>
+</html>

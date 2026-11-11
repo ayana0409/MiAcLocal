@@ -376,7 +376,10 @@ const char PAGE_INDEX_HTML[] PROGMEM = R"rawliteral(<!DOCTYPE html>
     <section class="card" aria-label="Thermostat Status">
       <div class="card-title">
         <span>Thermostat</span>
-        <span id="state-badge" class="badge b-muted">--</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span id="tele-badge" class="badge b-muted" title="Cloud Database Sync Status">Cloud: Off</span>
+          <span id="state-badge" class="badge b-muted">--</span>
+        </div>
       </div>
 
       <div class="grid-2" style="margin-bottom:12px">
@@ -536,6 +539,27 @@ const char PAGE_INDEX_HTML[] PROGMEM = R"rawliteral(<!DOCTYPE html>
         d.state.startsWith('FAULT') || d.state === 'AC_OFFLINE' ? 'b-danger' :
         d.state === 'PAUSED_USER' ? 'b-warn' : 'b-muted'
       );
+
+      const teleBadge = document.getElementById('tele-badge');
+      if (teleBadge) {
+        if (!d.teleEnabled) {
+          teleBadge.textContent = 'Cloud: Off';
+          teleBadge.className = 'badge b-muted';
+          teleBadge.title = 'Cloud logging disabled';
+        } else if (d.teleLastError) {
+          teleBadge.textContent = 'Cloud: Err';
+          teleBadge.className = 'badge b-danger';
+          teleBadge.title = d.teleLastError;
+        } else if (d.telePending > 0) {
+          teleBadge.textContent = 'Cloud: ' + d.telePending + ' q';
+          teleBadge.className = 'badge b-warn';
+          teleBadge.title = d.telePending + ' pending bucket(s)';
+        } else {
+          teleBadge.textContent = 'Cloud: OK';
+          teleBadge.className = 'badge b-fan';
+          teleBadge.title = d.teleLastSyncAgoSec >= 0 ? ('Synced ' + d.teleLastSyncAgoSec + 's ago') : 'Synced';
+        }
+      }
 
       document.getElementById('room-temp').textContent = d.sensorValid ? d.roomTemp.toFixed(1) + ' \u00B0C' : (d.sensorFault ? 'FAULT' : '--.- \u00B0C');
       document.getElementById('ac-temp').textContent = d.acOnline ? (d.acInternalTemp + ' \u00B0C') : '-- \u00B0C';
@@ -756,6 +780,43 @@ const char PAGE_SETTINGS_HTML[] PROGMEM = R"rawliteral(<!DOCTYPE html>
         </div>
       </form>
     </section>
+
+    <section class="card">
+      <h2 class="card-title">Cloud Telemetry (Turso)</h2>
+      <form id="tele-form" method="POST" action="/api/settings">
+        <div class="row" style="margin-bottom:12px">
+          <div>
+            <div class="row-label">Enable Cloud Sync</div>
+            <div class="row-sub">Pushes 1-min runtime buckets to Turso SQLite Cloud</div>
+          </div>
+          <input type="checkbox" id="teleEnabled" name="teleEnabled" value="true" style="width:20px;height:20px;cursor:pointer">
+        </div>
+
+        <div class="field">
+          <label for="teleUrl">Turso Database URL</label>
+          <span id="teleUrl-hint" class="hint">HTTPS or libsql:// URL (e.g. https://my-db.turso.io).</span>
+          <input id="teleUrl" name="teleUrl" type="text" placeholder="https://my-db.turso.io" autocorrect="off" autocapitalize="none" spellcheck="false" aria-describedby="teleUrl-hint">
+        </div>
+
+        <div class="field">
+          <label for="teleToken">Turso Auth Token</label>
+          <span id="teleToken-hint" class="hint">Bearer auth token. Leave empty to keep stored token.</span>
+          <input id="teleToken" name="teleToken" type="password" placeholder="Leave blank to keep existing" autocomplete="current-password" aria-describedby="teleToken-hint">
+        </div>
+
+        <div class="field">
+          <label for="teleDeviceId">Device ID</label>
+          <input id="teleDeviceId" name="teleDeviceId" type="text" maxlength="32" value="miac-main" required pattern="^[a-zA-Z0-9_-]{1,32}$" data-error="devid-err">
+          <span id="devid-err" class="error-msg">Error: Alphanumeric, hyphen, or underscore only (max 32 chars).</span>
+        </div>
+
+        <div class="btn-group">
+          <button type="submit" class="btn-primary">Save Cloud Settings</button>
+          <button id="btn-tele-test" type="button">Test Connection</button>
+        </div>
+      </form>
+      <div id="tele-test-msg" class="row-sub" style="margin-top:8px" role="status" aria-live="polite"></div>
+    </section>
   </div>
 
   <script src="/app.js"></script>
@@ -780,10 +841,22 @@ const char PAGE_SETTINGS_HTML[] PROGMEM = R"rawliteral(<!DOCTYPE html>
       document.getElementById('gateway').value = s.gateway || '';
       document.getElementById('subnet').value = s.subnet || '';
       document.getElementById('dns').value = s.dns || '';
+
+      const teleEn = document.getElementById('teleEnabled');
+      if (teleEn) teleEn.checked = !!s.teleEnabled;
+      const teleUrl = document.getElementById('teleUrl');
+      if (teleUrl) teleUrl.value = s.teleUrl || '';
+      const teleDev = document.getElementById('teleDeviceId');
+      if (teleDev) teleDev.value = s.teleDeviceId || 'miac-main';
+      const teleTok = document.getElementById('teleToken');
+      if (teleTok && s.teleTokenSet) {
+        teleTok.placeholder = '(Stored - leave blank to keep)';
+      }
     }
 
     initDeferredValidation(document.getElementById('ac-form'));
     initDeferredValidation(document.getElementById('wifi-form'));
+    initDeferredValidation(document.getElementById('tele-form'));
     bindWifiScan('btn-scan', 'scan-select', 'ssid');
 
     document.getElementById('ac-form').addEventListener('submit', async (e) => {
@@ -799,6 +872,46 @@ const char PAGE_SETTINGS_HTML[] PROGMEM = R"rawliteral(<!DOCTYPE html>
       const body = new URLSearchParams(new FormData(e.target));
       const r = await fetch('/api/settings', { method: 'POST', body });
       showBanner(await r.text(), r.ok);
+    });
+
+    document.getElementById('tele-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      if (!document.getElementById('teleEnabled').checked) {
+        fd.set('teleEnabled', 'false');
+      }
+      const body = new URLSearchParams(fd);
+      const r = await fetch('/api/settings', { method: 'POST', body });
+      showBanner(await r.text(), r.ok);
+      if (r.ok) {
+        document.getElementById('teleToken').value = '';
+        loadSettings();
+      }
+    });
+
+    document.getElementById('btn-tele-test').addEventListener('click', async () => {
+      const msgEl = document.getElementById('tele-test-msg');
+      msgEl.textContent = 'Testing Turso connection...';
+      const body = new URLSearchParams();
+      const u = document.getElementById('teleUrl').value.trim();
+      const t = document.getElementById('teleToken').value.trim();
+      if (u) body.set('url', u);
+      if (t) body.set('token', t);
+
+      try {
+        const r = await fetch('/api/telemetry/test', { method: 'POST', body });
+        const res = await r.json();
+        if (res.ok) {
+          msgEl.textContent = '\u2713 ' + (res.message || 'Connection successful!');
+          msgEl.style.color = 'var(--fan)';
+        } else {
+          msgEl.textContent = '\u2717 ' + (res.error || res.message || 'Connection failed');
+          msgEl.style.color = 'var(--danger)';
+        }
+      } catch (e) {
+        msgEl.textContent = '\u2717 Network error testing Turso';
+        msgEl.style.color = 'var(--danger)';
+      }
     });
 
     document.getElementById('btn-toggle-pw').addEventListener('click', (e) => {

@@ -1,0 +1,10 @@
+services:
+  miacstats:
+    build: .
+    container_name: miacstats
+    ports:
+      - "${PORT:-8080}:8080"
+    env_file:
+      - .env
+    restart: unless-stopped
+

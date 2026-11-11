@@ -113,3 +113,23 @@
 
 #define EVENT_LOG_CAPACITY          30
 
+// Cloud Telemetry & Time synchronization (Turso /v2/pipeline over HTTPS)
+#ifndef DEFAULT_TURSO_URL
+#define DEFAULT_TURSO_URL           ""
+#endif
+#ifndef DEFAULT_TURSO_TOKEN
+#define DEFAULT_TURSO_TOKEN         ""
+#endif
+#ifndef DEFAULT_DEVICE_ID
+#define DEFAULT_DEVICE_ID           "miac-main"
+#endif
+
+#define TELEMETRY_FLUSH_INTERVAL_MS 300000UL  // 5 minutes batch upload
+#define TELEMETRY_QUEUE_MAX_LINES   1500      // ~25 hours continuous logging at 1 min/bucket
+#define TELEMETRY_QUEUE_FILE        "/tele_q.jsonl"
+#define NTP_SERVER_1                "pool.ntp.org"
+#define NTP_SERVER_2                "time.google.com"
+#define NTP_TIMEZONE_OFFSET_SEC     (7 * 3600)
+#define NTP_DAYLIGHT_OFFSET_SEC     0
+
+

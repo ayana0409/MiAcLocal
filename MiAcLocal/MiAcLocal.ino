@@ -6,6 +6,7 @@
 #include "temp_sensor.h"
 #include "ac_device.h"
 #include "thermostat.h"
+#include "telemetry.h"
 #include "web_ui.h"
 
 // Double Arduino loopTask stack (16 KB instead of 8 KB) when supported by the ESP32 core
@@ -17,11 +18,13 @@ EventLog eventLog;
 SettingsStore settingsStore;
 AppSettings appCfg;
 WifiSettings wifiCfg;
+TelemetrySettings teleCfg;
 
 WifiManager wifiMgr;
 TempSensor tempSensor;
 AcDevice acDevice;
 Thermostat thermostat;
+TelemetryManager telemetry;
 WebUi webUi;
 
 void setup() {
@@ -30,6 +33,7 @@ void setup() {
 
   settingsStore.loadApp(appCfg);
   settingsStore.loadWifi(wifiCfg);
+  settingsStore.loadTelemetry(teleCfg);
   eventLog.add("MiAcLocal booting (target=" + String(appCfg.targetTemp) + "C, gap=" +
                String(appCfg.tempGap, 1) + "C, auto=" + (appCfg.autoEnabled ? "ON" : "OFF") + ")");
 
@@ -37,7 +41,8 @@ void setup() {
   wifiMgr.begin(wifiCfg, settingsStore, eventLog);
   acDevice.begin(appCfg, eventLog);
   thermostat.begin(appCfg, settingsStore, acDevice, tempSensor, eventLog);
-  webUi.begin(appCfg, wifiCfg, settingsStore, wifiMgr, tempSensor, acDevice, thermostat, eventLog);
+  telemetry.begin(teleCfg, eventLog);
+  webUi.begin(appCfg, wifiCfg, teleCfg, settingsStore, wifiMgr, tempSensor, acDevice, thermostat, telemetry, eventLog);
 }
 
 void loop() {
@@ -45,6 +50,11 @@ void loop() {
   tempSensor.update();
   bool pollUpdated = acDevice.update(wifiMgr.isStaConnected(), eventLog);
   thermostat.update(pollUpdated);
+  telemetry.update(wifiMgr.isStaConnected(),
+                   acDevice.state(),
+                   tempSensor.hasValidTemp(),
+                   tempSensor.tempC(),
+                   appCfg.autoEnabled);
   webUi.update();
   delay(2);
 }

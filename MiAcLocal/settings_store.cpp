@@ -8,6 +8,7 @@ namespace {
 
 const char* NS_APP = "miac";
 const char* NS_WIFI = "wifi";
+const char* NS_TELE = "tele";
 
 void putIntIfChanged(Preferences& p, const char* key, int val, int defaultVal) {
   if (!p.isKey(key) || p.getInt(key, defaultVal) != val) {
@@ -145,4 +146,59 @@ void SettingsStore::clearWifi() {
   p.clear();
   p.end();
 }
+
+String SettingsStore::normalizeTursoUrl(const String& raw) {
+  String s = raw;
+  s.trim();
+  while (s.endsWith("/")) {
+    s.remove(s.length() - 1);
+  }
+  if (s.startsWith("libsql://")) {
+    s = "https://" + s.substring(9);
+  }
+  return s;
+}
+
+bool SettingsStore::isValidDeviceId(const String& id) {
+  if (id.length() == 0 || id.length() > 32) return false;
+  for (size_t i = 0; i < id.length(); i++) {
+    char c = id[i];
+    if (!isalnum(static_cast<unsigned char>(c)) && c != '-' && c != '_') {
+      return false;
+    }
+  }
+  return true;
+}
+
+void SettingsStore::loadTelemetry(TelemetrySettings& out) {
+  Preferences p;
+  if (!p.begin(NS_TELE, true)) {
+    out.enabled = false;
+    out.url = normalizeTursoUrl(DEFAULT_TURSO_URL);
+    out.token = DEFAULT_TURSO_TOKEN;
+    out.deviceId = DEFAULT_DEVICE_ID;
+    return;
+  }
+
+  out.enabled = p.getBool("enabled", false);
+  out.url = normalizeTursoUrl(p.getString("url", DEFAULT_TURSO_URL));
+  out.token = p.getString("token", DEFAULT_TURSO_TOKEN);
+  String devId = p.getString("dev_id", DEFAULT_DEVICE_ID);
+  out.deviceId = isValidDeviceId(devId) ? devId : String(DEFAULT_DEVICE_ID);
+
+  p.end();
+}
+
+void SettingsStore::saveTelemetry(const TelemetrySettings& cfg) {
+  Preferences p;
+  if (!p.begin(NS_TELE, false)) return;
+
+  putBoolIfChanged(p, "enabled", cfg.enabled, false);
+  putStringIfChanged(p, "url", normalizeTursoUrl(cfg.url), "");
+  putStringIfChanged(p, "token", cfg.token, "");
+  putStringIfChanged(p, "dev_id", cfg.deviceId, DEFAULT_DEVICE_ID);
+
+  p.end();
+}
+
 
