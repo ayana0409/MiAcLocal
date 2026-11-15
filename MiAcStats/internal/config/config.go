@@ -19,6 +19,16 @@ type Config struct {
 	Location        *time.Location
 	DemoMode        bool
 	DefaultBilling  model.BillingSettings
+
+	// SSO Authentication
+	SSOEnabled      bool
+	SSOIdentityURL  string
+	SSOClientID     string
+	SSOClientSecret string
+	SSOScope        string
+	SessionSecret   string
+	SessionMaxAge   int
+	SecureCookie    bool
 }
 
 // DefaultEvnTiers returns editable 6-tier residential electricity prices in VND/kWh.
@@ -77,6 +87,14 @@ func Load() Config {
 			BaseHomeKWh:  getEnvFloat("BASE_HOME_KWH", 100),
 			EvnTiers:     DefaultEvnTiers(),
 		},
+		SSOEnabled:      getEnvBool("SSO_ENABLED", true),
+		SSOIdentityURL:  strings.TrimRight(getEnv("SSO_IDENTITY_URL", "https://identity.thuandd.io.vn"), "/"),
+		SSOClientID:     getEnv("SSO_CLIENT_ID", "QuickBite_Portal"),
+		SSOClientSecret: getEnv("SSO_CLIENT_SECRET", ""),
+		SSOScope:        getEnv("SSO_SCOPE", "openid profile email roles offline_access Identity"),
+		SessionSecret:   getEnv("SESSION_SECRET", "miacstats-session-secret-change-in-prod-32b"),
+		SessionMaxAge:   int(getEnvFloat("SESSION_MAX_AGE_SECONDS", 14*24*3600)),
+		SecureCookie:    getEnvBool("SECURE_COOKIE", true),
 	}
 }
 

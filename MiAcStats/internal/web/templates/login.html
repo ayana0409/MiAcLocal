@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Đăng Nhập — MiAcStats</title>
+  <style>
+    :root {
+      --bg-light: #f4f6f9;
+      --surface-light: #ffffff;
+      --surface-alt-light: #eef2f6;
+      --border-light: #d0d7de;
+      --text-light: #1f2328;
+      --muted-light: #57606a;
+      --cool-light: #0969da;
+      --err-light: #cf222e;
+      --err-bg-light: #ffebe9;
+
+      --bg-dark: #0d1117;
+      --surface-dark: #161b22;
+      --surface-alt-dark: #1f2630;
+      --border-dark: #30363d;
+      --text-dark: #e6edf3;
+      --muted-dark: #8b949e;
+      --cool-dark: #58a6ff;
+      --err-dark: #ff7b72;
+      --err-bg-dark: #3d1417;
+
+      --bg: var(--bg-light);
+      --surface: var(--surface-light);
+      --surface-alt: var(--surface-alt-light);
+      --border: var(--border-light);
+      --text: var(--text-light);
+      --muted: var(--muted-light);
+      --cool: var(--cool-light);
+      --err: var(--err-light);
+      --err-bg: var(--err-bg-light);
+
+      color-scheme: light dark;
+      accent-color: var(--cool);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: var(--bg-dark);
+        --surface: var(--surface-dark);
+        --surface-alt: var(--surface-alt-dark);
+        --border: var(--border-dark);
+        --text: var(--text-dark);
+        --muted: var(--muted-dark);
+        --cool: var(--cool-dark);
+        --err: var(--err-dark);
+        --err-bg: var(--err-bg-dark);
+      }
+    }
+
+    @supports (color: light-dark(white, black)) {
+      :root {
+        --bg: light-dark(var(--bg-light), var(--bg-dark));
+        --surface: light-dark(var(--surface-light), var(--surface-dark));
+        --surface-alt: light-dark(var(--surface-alt-light), var(--surface-alt-dark));
+        --border: light-dark(var(--border-light), var(--border-dark));
+        --text: light-dark(var(--text-light), var(--text-dark));
+        --muted: light-dark(var(--muted-light), var(--muted-dark));
+        --cool: light-dark(var(--cool-light), var(--cool-dark));
+        --err: light-dark(var(--err-light), var(--err-dark));
+        --err-bg: light-dark(var(--err-bg-light), var(--err-bg-dark));
+      }
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+
+    .login-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2.25rem 2rem;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+    }
+
+    .brand {
+      text-align: center;
+      margin-bottom: 1.75rem;
+    }
+
+    .brand-icon {
+      font-size: 2.5rem;
+      line-height: 1;
+      margin-bottom: 0.5rem;
+      display: inline-block;
+    }
+
+    .brand h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .brand p {
+      font-size: 0.875rem;
+      color: var(--muted);
+      margin-top: 0.25rem;
+    }
+
+    .alert-error {
+      background: var(--err-bg);
+      border: 1px solid var(--err);
+      color: var(--err);
+      border-radius: 6px;
+      padding: 0.75rem 0.875rem;
+      font-size: 0.875rem;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .field {
+      margin-bottom: 1.25rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.875rem;
+      font-weight: 600;
+      margin-bottom: 0.4rem;
+      color: var(--text);
+    }
+
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      padding: 0.65rem 0.85rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface-alt);
+      color: var(--text);
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    input[type="text"]:focus,
+    input[type="password"]:focus {
+      border-color: var(--cool);
+      box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.18);
+    }
+
+    .btn-submit {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: var(--cool);
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s ease;
+      margin-top: 0.5rem;
+    }
+
+    .btn-submit:hover {
+      opacity: 0.92;
+    }
+
+    .btn-submit:active {
+      opacity: 0.85;
+    }
+
+    .footer-note {
+      text-align: center;
+      margin-top: 1.5rem;
+      font-size: 0.775rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <main class="login-card">
+    <div class="brand">
+      <div class="brand-icon">❄️</div>
+      <h1>MiAcStats</h1>
+      <p>Quản trị máy lạnh &amp; Thống kê điện năng</p>
+    </div>
+
+    {{if .Error}}
+    <div role="alert" class="alert-error">
+      <span>⚠️</span>
+      <span>{{.Error}}</span>
+    </div>
+    {{end}}
+
+    <form method="POST" action="/login">
+      <div class="field">
+        <label for="username">Tên đăng nhập hoặc Email</label>
+        <input type="text" id="username" name="username" autocomplete="username" required autofocus placeholder="admin / user@domain.com" value="{{.Username}}">
+      </div>
+
+      <div class="field">
+        <label for="password">Mật khẩu</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" required placeholder="••••••••">
+      </div>
+
+      <button type="submit" class="btn-submit">Đăng Nhập</button>
+    </form>
+
+    <div class="footer-note">
+      Bảo vệ bởi QuickBite Identity SSO (OpenIddict)
+    </div>
+  </main>
+</body>
+</html>
+

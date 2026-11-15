@@ -46,7 +46,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("MiAcStats listening on :%s (tz=%s, demo=%v)", cfg.Port, cfg.Timezone, cfg.DemoMode)
+		log.Printf("MiAcStats listening on :%s (tz=%s, demo=%v, sso=%v)", cfg.Port, cfg.Timezone, cfg.DemoMode, cfg.SSOEnabled)
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("listen failed: %v", err)
 		}
