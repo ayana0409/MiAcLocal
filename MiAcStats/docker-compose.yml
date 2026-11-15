@@ -22,13 +22,11 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=web"
       - "traefik.docker.allownonrunning=true"
-      # Định tuyến theo path /miac-stats (nếu web dùng asset gốc / thì đổi sang Host(`miac.thuandd.io.vn`) và bỏ 2 dòng stripprefix)
-      - "traefik.http.routers.miacstats.rule=(Host(`thuandd.io.vn`) || Host(`traefik`)) && PathPrefix(`/miac-stats`)"
+      - "traefik.http.routers.miacstats.rule=(Host(`miac.thuandd.io.vn`))"
       - "traefik.http.routers.miacstats.entrypoints=web"
       - "traefik.http.services.miacstats.loadbalancer.server.port=8080"
       - "traefik.http.routers.miacstats.middlewares=miacstats-sablier@docker,miacstats-strip@docker"
       - "traefik.http.middlewares.miacstats-strip.stripprefix.prefixes=/miac-stats"
-      # Sablier scale-to-zero (0MB RAM khi không dùng)
       - "sablier.enable=true"
       - "sablier.group=miac-stats"
       - "traefik.http.middlewares.miacstats-sablier.plugin.sablier.sablierurl=http://sablier:10000"
