@@ -1,10 +1,45 @@
 services:
-  miacstats:
+  miac-stats:
     build: .
-    container_name: miacstats
-    ports:
-      - "${PORT:-8080}:8080"
+    container_name: miac-stats
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
     env_file:
       - .env
-    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 64M
+        reservations:
+          cpus: "0.05"
+          memory: 16M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.docker.allownonrunning=true"
+      - "traefik.http.routers.miacstats.rule=(Host(`miac.thuandd.io.vn`))"
+      - "traefik.http.routers.miacstats.entrypoints=web"
+      - "traefik.http.services.miacstats.loadbalancer.server.port=8080"
+      - "traefik.http.routers.miacstats.middlewares=miacstats-sablier@docker,miacstats-strip@docker"
+      - "traefik.http.middlewares.miacstats-strip.stripprefix.prefixes=/miac-stats"
+      - "sablier.enable=true"
+      - "sablier.group=miac-stats"
+      - "traefik.http.middlewares.miacstats-sablier.plugin.sablier.sablierurl=http://sablier:10000"
+      - "traefik.http.middlewares.miacstats-sablier.plugin.sablier.sessionduration=10m"
+      - "traefik.http.middlewares.miacstats-sablier.plugin.sablier.names=miac-stats"
+      - "traefik.http.middlewares.miacstats-sablier.plugin.sablier.mode=blocking"
+      - "traefik.http.middlewares.miacstats-sablier.plugin.sablier.blocking.timeout=15s"
+    networks:
+      - web
+      - internal-net
 
+networks:
+  web:
+    external: true
+  internal-net:
+    external: true
