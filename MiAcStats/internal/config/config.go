@@ -29,6 +29,12 @@ type Config struct {
 	SessionSecret   string
 	SessionMaxAge   int
 	SecureCookie    bool
+
+	// Rollup Configuration
+	RollupEnabled          bool
+	RollupKeepDays         int
+	RollupMinIntervalHours float64
+	RollupDryRun           bool
 }
 
 // DefaultEvnTiers returns editable 6-tier residential electricity prices in VND/kWh.
@@ -69,6 +75,11 @@ func Load() Config {
 		tariffMode = "evn"
 	}
 
+	rollupKeepDays := int(getEnvFloat("ROLLUP_KEEP_DAYS", 7))
+	if rollupKeepDays < 3 {
+		rollupKeepDays = 3
+	}
+
 	return Config{
 		Port:            getEnv("PORT", "8080"),
 		TursoURL:        NormalizeTursoURL(os.Getenv("TURSO_DATABASE_URL")),
@@ -87,14 +98,18 @@ func Load() Config {
 			BaseHomeKWh:  getEnvFloat("BASE_HOME_KWH", 100),
 			EvnTiers:     DefaultEvnTiers(),
 		},
-		SSOEnabled:      getEnvBool("SSO_ENABLED", true),
-		SSOIdentityURL:  strings.TrimRight(getEnv("SSO_IDENTITY_URL", "https://identity.thuandd.io.vn"), "/"),
-		SSOClientID:     getEnv("SSO_CLIENT_ID", "QuickBite_Portal"),
-		SSOClientSecret: getEnv("SSO_CLIENT_SECRET", ""),
-		SSOScope:        getEnv("SSO_SCOPE", "openid profile email roles offline_access Identity"),
-		SessionSecret:   getEnv("SESSION_SECRET", "miacstats-session-secret-change-in-prod-32b"),
-		SessionMaxAge:   int(getEnvFloat("SESSION_MAX_AGE_SECONDS", 14*24*3600)),
-		SecureCookie:    getEnvBool("SECURE_COOKIE", true),
+		SSOEnabled:             getEnvBool("SSO_ENABLED", true),
+		SSOIdentityURL:         strings.TrimRight(getEnv("SSO_IDENTITY_URL", "https://identity.thuandd.io.vn"), "/"),
+		SSOClientID:            getEnv("SSO_CLIENT_ID", "QuickBite_Portal"),
+		SSOClientSecret:        getEnv("SSO_CLIENT_SECRET", ""),
+		SSOScope:               getEnv("SSO_SCOPE", "openid profile email roles offline_access Identity"),
+		SessionSecret:          getEnv("SESSION_SECRET", "miacstats-session-secret-change-in-prod-32b"),
+		SessionMaxAge:          int(getEnvFloat("SESSION_MAX_AGE_SECONDS", 14*24*3600)),
+		SecureCookie:           getEnvBool("SECURE_COOKIE", true),
+		RollupEnabled:          getEnvBool("ROLLUP_ENABLED", true),
+		RollupKeepDays:         rollupKeepDays,
+		RollupMinIntervalHours: getEnvFloat("ROLLUP_MIN_INTERVAL_HOURS", 24),
+		RollupDryRun:           getEnvBool("ROLLUP_DRY_RUN", false),
 	}
 }
 

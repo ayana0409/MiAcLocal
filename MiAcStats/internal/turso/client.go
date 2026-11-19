@@ -3,6 +3,7 @@ package turso
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,9 @@ import (
 )
 
 const billingConfigKey = "billing_settings_v1"
+
+//go:embed sql/query_buckets.sql
+var queryBucketsSQL string
 
 // Store defines database operations required by MiAcStats handlers.
 type Store interface {
@@ -135,20 +139,50 @@ func (c *Client) EnsureSchema(ctx context.Context) error {
 				updated_at INTEGER NOT NULL
 			)`,
 		},
+		{
+			SQL: `CREATE TABLE IF NOT EXISTS ac_buckets_hourly (
+				device_id          TEXT    NOT NULL,
+				ts_utc             INTEGER NOT NULL,
+				session_start_utc  INTEGER NOT NULL,
+				duration_sec       INTEGER NOT NULL,
+				cool_sec           INTEGER NOT NULL,
+				fan_low_sec        INTEGER NOT NULL,
+				fan_high_sec       INTEGER NOT NULL,
+				offline_sec        INTEGER NOT NULL DEFAULT 0,
+				room_temp_avg      REAL,
+				room_temp_min      REAL,
+				room_temp_max      REAL,
+				ac_temp_avg        REAL,
+				target_temp        INTEGER,
+				auto_sec           INTEGER NOT NULL DEFAULT 0,
+				PRIMARY KEY (device_id, ts_utc)
+			)`,
+		},
+		{
+			SQL: `CREATE INDEX IF NOT EXISTS idx_ac_buckets_hourly_ts ON ac_buckets_hourly (ts_utc)`,
+		},
+		{
+			SQL: `CREATE TRIGGER IF NOT EXISTS trg_ac_buckets_after_watermark
+				BEFORE INSERT ON ac_buckets
+				WHEN NEW.ts_utc < COALESCE((SELECT CAST(value AS INTEGER) FROM app_config WHERE key = 'rollup_watermark'), 0)
+				BEGIN
+					SELECT RAISE(IGNORE);
+				END;`,
+		},
 	}
 	_, err := c.execPipeline(ctx, stmts)
 	return err
 }
 
-// QueryBuckets returns time-ordered buckets inside [fromUTC, toUTC) for deviceID.
+// QueryBuckets returns time-ordered buckets inside [fromUTC, toUTC) for deviceID,
+// reading aggregated hourly records below rollup_watermark and raw buckets from watermark onwards.
 func (c *Client) QueryBuckets(ctx context.Context, deviceID string, fromUTC, toUTC int64) ([]model.Bucket, error) {
 	query := stmt{
-		SQL: `SELECT device_id, ts_utc, session_start_utc, duration_sec, cool_sec, fan_low_sec, fan_high_sec,
-		             offline_sec, room_temp_avg, room_temp_min, room_temp_max, ac_temp_avg, target_temp, auto_sec
-		      FROM ac_buckets
-		      WHERE device_id = ? AND ts_utc >= ? AND ts_utc < ?
-		      ORDER BY ts_utc ASC`,
+		SQL: strings.TrimSpace(queryBucketsSQL),
 		Args: []arg{
+			textArg(deviceID),
+			intArg(fromUTC),
+			intArg(toUTC),
 			textArg(deviceID),
 			intArg(fromUTC),
 			intArg(toUTC),

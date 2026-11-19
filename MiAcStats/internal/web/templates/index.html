@@ -605,7 +605,7 @@
         $('to-dt').value = data.to_datetime;
         $('tz-badge').textContent = data.timezone;
         $('demo-badge').hidden = !data.demo_mode;
-        $('subtitle').textContent = `Device: ${data.device_id} | ${data.summary.session_count} run sessions (${data.summary.bucket_count} buckets)`;
+        $('subtitle').textContent = `Device: ${data.device_id} | ${data.summary.session_count} run sessions (${data.summary.bucket_count} bản ghi)`;
 
         const s = data.summary;
         $('kpi-cool').textContent = `${fmtNum(s.cool_hours, 2)} h`;

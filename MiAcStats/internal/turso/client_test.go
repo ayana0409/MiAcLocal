@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"miacstats/internal/config"
@@ -98,7 +99,14 @@ func TestTursoPipelineQueryAndSaveSettings(t *testing.T) {
 	}
 	reqs := sent["requests"].([]any)
 	stmtMap := reqs[0].(map[string]any)["stmt"].(map[string]any)
+	sqlStr := stmtMap["sql"].(string)
+	if !strings.Contains(sqlStr, "ac_buckets_hourly") {
+		t.Fatalf("expected query to reference ac_buckets_hourly, got %s", sqlStr)
+	}
 	args := stmtMap["args"].([]any)
+	if len(args) != 6 {
+		t.Fatalf("expected 6 query args, got %d", len(args))
+	}
 	arg1 := args[1].(map[string]any)
 	if arg1["type"] != "integer" || arg1["value"] != "1762870000" {
 		t.Fatalf("expected string-encoded integer arg, got %+v", arg1)
