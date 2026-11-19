@@ -20,7 +20,7 @@ services:
           memory: 16M
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=web"
+      - "traefik.docker.network=dokploy-network"
       - "traefik.docker.allownonrunning=true"
       - "traefik.http.routers.miacstats.rule=(Host(`miac.thuandd.io.vn`))"
       - "traefik.http.routers.miacstats.entrypoints=web"
@@ -37,8 +37,11 @@ services:
     networks:
       - web
       - internal-net
+      - dokploy-network
 
 networks:
+  dokploy-network:
+    external: true
   web:
     external: true
   internal-net:
